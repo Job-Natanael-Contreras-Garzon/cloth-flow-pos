@@ -1,4 +1,7 @@
-import { Layout } from "@/components/Layout"
+import { Layout } from "@/components/Layout";
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { setPageTitle } from '@/store/uiSlice';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +18,11 @@ import {
 import { useState } from "react"
 
 export default function CategoriesPage() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(setPageTitle('Categorías'));
+  }, [dispatch]);
   const [searchTerm, setSearchTerm] = useState("")
 
   const categories = [
@@ -102,15 +110,7 @@ export default function CategoriesPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Categorías
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Organización de productos por categorías
-            </p>
-          </div>
+        <div className="flex items-center justify-end">
           <div className="flex gap-3">
             <Button size="sm" className="bg-gradient-primary">
               <Plus className="h-4 w-4 mr-2" />

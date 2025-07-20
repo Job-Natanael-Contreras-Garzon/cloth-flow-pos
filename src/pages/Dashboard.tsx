@@ -1,5 +1,9 @@
 import { StatsCard } from "@/components/StatsCard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Layout } from "@/components/Layout";
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { setPageTitle } from '@/store/uiSlice';
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { 
@@ -62,18 +66,15 @@ const lowStockItems = [
 ]
 
 export default function Dashboard() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(setPageTitle('Dashboard'));
+  }, [dispatch]);
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Resumen general de tu tienda de moda
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <div className="flex gap-3">
           <Button variant="outline" size="sm">
             <Eye className="h-4 w-4 mr-2" />

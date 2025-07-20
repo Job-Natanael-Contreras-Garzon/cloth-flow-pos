@@ -1,4 +1,7 @@
-import { Layout } from "@/components/Layout"
+import { Layout } from "@/components/Layout";
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { setPageTitle } from '@/store/uiSlice';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +17,11 @@ import {
 import { useState } from "react"
 
 export default function SalesPage() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(setPageTitle('Ventas'));
+  }, [dispatch]);
   const [searchTerm, setSearchTerm] = useState("")
 
   const sales = [
@@ -100,14 +108,7 @@ export default function SalesPage() {
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Ventas
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Historial y análisis de ventas realizadas
-            </p>
-          </div>
+
           <div className="flex gap-3">
             <Button variant="outline" size="sm">
               <Calendar className="h-4 w-4 mr-2" />

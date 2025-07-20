@@ -88,56 +88,20 @@ export function useCreateSale() {
 
   return useMutation({
     mutationFn: async (saleData: CreateSaleData) => {
-      // Generate sale number
-      const { data: saleNumber, error: numberError } = await supabase
-        .rpc('generate_sale_number')
+      const { error } = await (supabase.rpc as any)('create_sale_and_update_stock', {
+        p_customer_name: saleData.customer_name,
+        p_customer_email: saleData.customer_email,
+        p_subtotal: saleData.subtotal,
+        p_tax: saleData.tax,
+        p_total: saleData.total,
+        p_payment_method: saleData.payment_method,
+        p_items: saleData.items,
+      });
 
-      if (numberError) throw numberError
-
-      // Create sale
-      const { data: sale, error: saleError } = await supabase
-        .from('sales')
-        .insert([{
-          sale_number: saleNumber,
-          customer_name: saleData.customer_name,
-          customer_email: saleData.customer_email,
-          subtotal: saleData.subtotal,
-          tax: saleData.tax,
-          total: saleData.total,
-          payment_method: saleData.payment_method,
-        }])
-        .select()
-        .single()
-
-      if (saleError) throw saleError
-
-      // Create sale items
-      const saleItems = saleData.items.map(item => ({
-        ...item,
-        sale_id: sale.id,
-      }))
-
-      const { error: itemsError } = await supabase
-        .from('sale_items')
-        .insert(saleItems)
-
-      if (itemsError) throw itemsError
-
-      // Update product stock
-      for (const item of saleData.items) {
-        const { error: stockError } = await supabase
-          .rpc('update_product_stock', {
-            product_id: item.product_id,
-            quantity_sold: item.quantity
-          })
-
-        if (stockError) {
-          console.error('Error updating stock:', stockError)
-          // Don't throw here to avoid rolling back the sale
-        }
+      if (error) {
+        console.error('Error creating sale:', error);
+        throw new Error(`Error al procesar la venta: ${error.message}`);
       }
-
-      return sale
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales'] })

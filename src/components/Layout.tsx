@@ -1,13 +1,16 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/AppSidebar"
 import { Button } from "@/components/ui/button"
-import { Bell, Search, User } from "lucide-react"
+import { Bell, User } from "lucide-react"
+import { useSelector } from 'react-redux';
+import { RootState } from '@/store/store';
 
 interface LayoutProps {
   children: React.ReactNode
 }
 
 export function Layout({ children }: LayoutProps) {
+  const pageTitle = useSelector((state: RootState) => state.ui.pageTitle);
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -18,10 +21,7 @@ export function Layout({ children }: LayoutProps) {
           <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between shadow-card">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="h-8 w-8" />
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Search className="h-4 w-4" />
-                <span className="text-sm">Buscar productos, ventas...</span>
-              </div>
+              <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">{pageTitle}</h1>
             </div>
             
             <div className="flex items-center gap-3">

@@ -1,4 +1,7 @@
-import { Layout } from "@/components/Layout"
+import { Layout } from "@/components/Layout";
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { setPageTitle } from '@/store/uiSlice';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +17,11 @@ import {
 } from "lucide-react"
 
 export default function AlertsPage() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(setPageTitle('Alertas'));
+  }, [dispatch]);
   const alerts = [
     {
       id: "1",
@@ -120,19 +128,13 @@ export default function AlertsPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Alertas
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Notificaciones y alertas del sistema
-            </p>
-          </div>
+
+
+        <div className="flex items-center justify-end">
           <div className="flex gap-3">
             <Button variant="outline" size="sm">
               <Settings className="h-4 w-4 mr-2" />
-              Configurar
+              Configurar Alertas
             </Button>
             <Button variant="outline" size="sm">
               <CheckCircle className="h-4 w-4 mr-2" />

@@ -1,4 +1,7 @@
-import { Layout } from "@/components/Layout"
+import { Layout } from "@/components/Layout";
+import { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { setPageTitle } from '@/store/uiSlice';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,18 +21,15 @@ import {
 } from "lucide-react"
 
 export default function SettingsPage() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(setPageTitle('Configuración'));
+  }, [dispatch]);
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Configuración
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Personaliza tu sistema POS
-            </p>
-          </div>
+        <div className="flex items-center justify-end">
           <Button className="bg-gradient-primary">
             <Save className="h-4 w-4 mr-2" />
             Guardar Cambios

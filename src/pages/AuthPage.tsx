@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useDispatch } from 'react-redux';
+import { setPageTitle } from '@/store/uiSlice';
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { login } from '../store/authSlice';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +12,16 @@ import { useToast } from "@/components/ui/use-toast";
 import { Mail, Lock, Store, Eye, EyeOff } from "lucide-react";
 
 export default function AuthPage() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(setPageTitle('Autenticación'));
+  }, [dispatch]);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("admin@gmail.com");
   const [password, setPassword] = useState("admin123");
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const { toast } = useToast();
 
   const handleSignIn = async (e: React.FormEvent) => {
