@@ -93,6 +93,43 @@ CREATE TABLE public.alerts (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
+-- Crear tipo de rol de usuario
+CREATE TYPE public.user_role AS ENUM ('admin', 'seller');
+
+-- Crear tabla de perfiles de usuario
+CREATE TABLE public.profiles (
+  id UUID NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  role public.user_role NOT NULL DEFAULT 'seller',
+  full_name TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Función para crear un perfil cuando se crea un nuevo usuario
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name');
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger para la función anterior
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Función para obtener el rol de un usuario
+CREATE OR REPLACE FUNCTION public.get_user_role(user_id UUID)
+RETURNS public.user_role AS $$
+DECLARE
+  user_role public.user_role;
+BEGIN
+  SELECT role INTO user_role FROM public.profiles WHERE id = user_id;
+  RETURN user_role;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Habilitar RLS en todas las tablas
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -101,15 +138,32 @@ ALTER TABLE public.sale_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchase_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Políticas RLS - Por ahora permitir acceso completo para usuarios autenticados
-CREATE POLICY "Users can manage categories" ON public.categories FOR ALL USING (true);
-CREATE POLICY "Users can manage products" ON public.products FOR ALL USING (true);
-CREATE POLICY "Users can manage sales" ON public.sales FOR ALL USING (true);
-CREATE POLICY "Users can manage sale_items" ON public.sale_items FOR ALL USING (true);
-CREATE POLICY "Users can manage purchases" ON public.purchases FOR ALL USING (true);
-CREATE POLICY "Users can manage purchase_items" ON public.purchase_items FOR ALL USING (true);
-CREATE POLICY "Users can manage alerts" ON public.alerts FOR ALL USING (true);
+-- Políticas RLS basadas en roles
+-- Perfiles: Los usuarios pueden ver su propio perfil. Los admins pueden ver todos.
+CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Admins can view all profiles" ON public.profiles FOR SELECT USING (public.get_user_role(auth.uid()) = 'admin');
+
+-- Productos: Cualquier usuario autenticado puede verlos.
+CREATE POLICY "Authenticated users can view products" ON public.products FOR SELECT TO authenticated USING (true);
+
+-- Función para crear un usuario con rol de admin (solo para desarrollo)
+CREATE OR REPLACE FUNCTION public.create_user_with_admin_role(email TEXT, password TEXT)
+RETURNS void AS $$
+DECLARE
+  user_id UUID;
+BEGIN
+  -- 1. Crear el usuario en auth.users. El trigger on_auth_user_created creará su perfil automáticamente.
+  INSERT INTO auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+  VALUES (uuid_generate_v4(), uuid_generate_v4(), 'authenticated', 'authenticated', email, crypt(password, gen_salt('bf')), now(), now(), now()) RETURNING id INTO user_id;
+
+  -- 2. Actualizar el perfil recién creado para asignarle el rol de 'admin'.
+  UPDATE public.profiles
+  SET role = 'admin'
+  WHERE id = user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Función para actualizar timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
