@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { 
   LayoutDashboard, 
   Package, 
@@ -20,7 +19,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
 
@@ -43,14 +41,13 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed"
 
   const getNavClasses = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-3 py-2 rounded-lg transition-smooth ${
-      isActive 
-        ? "bg-primary text-primary-foreground shadow-elegant font-medium" 
-        : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+    `flex items-center gap-3 px-3 py-2 rounded-lg transition-transform duration-200 transform ${isActive
+      ? "bg-primary text-primary-foreground shadow-elegant font-medium scale-105"
+      : "text-slate-700 hover:text-slate-900 hover:scale-110"
     }`
 
   return (
-    <Sidebar className={`${isCollapsed ? "w-16" : "w-64"} border-r border-border bg-card`}>
+    <Sidebar className={`${isCollapsed ? "w-16" : "w-64"} transition-all duration-300 ease-in-out border-r border-border bg-card`}>
       <SidebarContent className="p-4">
         {/* Logo/Brand */}
         <div className="mb-6 px-2">
@@ -74,12 +71,12 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-1">
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="p-0">
+                  
                     <NavLink to={item.url} end className={getNavClasses}>
                       <item.icon className={`h-5 w-5 ${isCollapsed ? "mx-auto" : ""}`} />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <span className={`${isCollapsed ? 'sr-only' : ''}`}>{item.title}</span>
                     </NavLink>
-                  </SidebarMenuButton>
+                  
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -95,12 +92,12 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-1">
               {managementItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="p-0">
+                  
                     <NavLink to={item.url} className={getNavClasses}>
                       <item.icon className={`h-5 w-5 ${isCollapsed ? "mx-auto" : ""}`} />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <span className={`${isCollapsed ? 'sr-only' : ''}`}>{item.title}</span>
                     </NavLink>
-                  </SidebarMenuButton>
+                  
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
