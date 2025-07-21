@@ -22,6 +22,7 @@ import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ReportsPage from "./pages/ReportsPage";
 import LoginPage from "./pages/LoginPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 const queryClient = new QueryClient();
 
@@ -36,8 +37,9 @@ const App = () => {
               <Sonner />
               <BrowserRouter>
             <Routes>
-              {/* Ruta pública de login */}
+              {/* Rutas públicas */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               
               {/* Rutas protegidas */}
               <Route path="/" element={
