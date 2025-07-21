@@ -8,6 +8,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Configuración para manejar rutas de SPA en desarrollo
+    historyApiFallback: true,
+  },
+  build: {
+    // Configuración para producción
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
   plugins: [
     react(),
