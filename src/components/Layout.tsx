@@ -1,9 +1,16 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/AppSidebar"
 import { Button } from "@/components/ui/button"
-import { Bell, User } from "lucide-react"
+import { Bell, User, LogOut } from "lucide-react"
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
+import { useAuth } from '@/hooks/useSimpleAuth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface LayoutProps {
   children: React.ReactNode
@@ -11,6 +18,8 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const pageTitle = useSelector((state: RootState) => state.ui.pageTitle);
+  const { user, signOut } = useAuth();
+  
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -30,9 +39,22 @@ export function Layout({ children }: LayoutProps) {
                 <span className="absolute -top-1 -right-1 h-3 w-3 bg-destructive rounded-full text-xs"></span>
               </Button>
               
-              <Button variant="outline" size="icon">
-                <User className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <User className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled>
+                    {user?.email || 'Usuario'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={signOut} className="text-red-600">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Cerrar Sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
 

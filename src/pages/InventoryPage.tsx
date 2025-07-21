@@ -1,7 +1,5 @@
-import { Layout } from "@/components/Layout";
-import { useEffect, useState } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { setPageTitle } from '@/store/uiSlice';
+import { SimpleLayout } from "@/components/SimpleLayout";
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,202 +14,255 @@ import {
   Loader2,
   AlertTriangle
 } from "lucide-react";
-import { openFormModal, closeFormModal, openDeleteDialog, closeDeleteDialog } from "@/slices/inventoryUISlice";
-import { RootState } from "@/store/store";
-import { useProducts } from "@/hooks/useProducts";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useProducts, Product } from "@/hooks/useProducts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ProductForm } from "../components/ProductForm";
 import { DeleteProductDialog } from "@/components/DeleteProductDialog";
-import { useQueryClient } from "@tanstack/react-query";
 
 export default function InventoryPage() {
-  const dispatch = useDispatch();
-  const queryClient = useQueryClient();
-  
   const [searchTerm, setSearchTerm] = useState("");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
   const { data: products = [], isLoading, isError } = useProducts();
-  const { isFormOpen, isDeleteDialogOpen, selectedProduct } = useSelector((state: RootState) => state.inventoryUI);
-
-  useEffect(() => {
-    dispatch(setPageTitle('Inventario'));
-  }, [dispatch]);
 
   const getStockStatus = (stock: number, minStock: number) => {
     if (stock === 0) return { label: "Sin Stock", variant: "destructive" as const };
-    if (stock <= minStock) return { label: "Stock Bajo", variant: "destructive" as const };
-    if (stock <= minStock * 2) return { label: "Stock Medio", variant: "secondary" as const };
-    return { label: "Stock Bueno", variant: "default" as const };
+    if (stock <= minStock) return { label: "Bajo Stock", variant: "secondary" as const };
+    return { label: "En Stock", variant: "default" as const };
   };
 
-  const filteredProducts = products.filter(product => {
-    const term = searchTerm.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(term) ||
-      (product.sku && product.sku.toLowerCase().includes(term)) ||
-      (product.categories && product.categories.name.toLowerCase().includes(term))
-    );
-  });
-
-  const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="ml-4 text-lg">Cargando productos...</p>
-        </div>
-      );
-    }
-
-    if (isError) {
-      return (
-        <div className="flex justify-center items-center py-12">
-          <AlertTriangle className="h-8 w-8 text-destructive" />
-          <p className="ml-4 text-lg text-destructive">No se pudieron cargar los productos.</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-2 font-medium text-muted-foreground">Producto</th>
-              <th className="text-left py-3 px-2 font-medium text-muted-foreground">SKU</th>
-              <th className="text-left py-3 px-2 font-medium text-muted-foreground">Categoría</th>
-              <th className="text-right py-3 px-2 font-medium text-muted-foreground">Precio</th>
-              <th className="text-right py-3 px-2 font-medium text-muted-foreground">Costo</th>
-              <th className="text-center py-3 px-2 font-medium text-muted-foreground">Stock</th>
-              <th className="text-center py-3 px-2 font-medium text-muted-foreground">Estado</th>
-              <th className="text-center py-3 px-2 font-medium text-muted-foreground">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProducts.map((product) => {
-              const stockStatus = getStockStatus(product.stock, product.min_stock);
-              const margin = ((product.price - product.cost) / product.price * 100).toFixed(1);
-              
-              return (
-                <tr key={product.id} className="border-b border-border hover:bg-secondary/30 transition-smooth">
-                  <td className="py-4 px-2">
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <div className="flex gap-1 mt-1">
-                        {product.sizes.slice(0, 3).map(size => (
-                          <Badge key={size} variant="outline" className="text-xs">{size}</Badge>
-                        ))}
-                        {product.sizes.length > 3 && (
-                          <Badge variant="outline" className="text-xs">+{product.sizes.length - 3}</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2">
-                    <code className="text-sm bg-secondary px-2 py-1 rounded">{product.sku}</code>
-                  </td>
-                  <td className="py-4 px-2 text-sm">{product.categories?.name || 'N/A'}</td>
-                  <td className="py-4 px-2 text-right">
-                    <div>
-                      <p className="font-bold text-primary">${product.price}</p>
-                      <p className="text-xs text-success">+{margin}%</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2 text-right">
-                    <span className="text-sm text-muted-foreground">${product.cost}</span>
-                  </td>
-                  <td className="py-4 px-2 text-center">
-                    <div>
-                      <p className="font-bold text-lg">{product.stock}</p>
-                      <p className="text-xs text-muted-foreground">Min: {product.min_stock}</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-2 text-center">
-                    <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
-                  </td>
-                  <td className="py-4 px-2">
-                    <div className="flex justify-center gap-2">
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => dispatch(openFormModal(product))}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => dispatch(openDeleteDialog(product))}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
+  const getStockColor = (stock: number, minStock: number) => {
+    if (stock === 0) return "text-red-600";
+    if (stock <= minStock) return "text-yellow-600";
+    return "text-green-600";
   };
+
+  const handleEditProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleNewProduct = () => {
+    setSelectedProduct(null);
+    setIsFormOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setSelectedProduct(null);
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalProducts = products.length;
+  const activeProducts = products.filter(p => p.is_active).length;
+  const lowStockProducts = products.filter(p => p.stock <= p.min_stock && p.stock > 0).length;
+  const outOfStockProducts = products.filter(p => p.stock === 0).length;
 
   return (
-    <Layout>
+    <SimpleLayout title="Inventario">
       <div className="space-y-6">
-        <div className="flex items-center justify-end">
-          <Dialog open={isFormOpen} onOpenChange={(isOpen) => !isOpen && dispatch(closeFormModal())}>
-            <DialogTrigger asChild>
-              <Button onClick={() => dispatch(openFormModal(null))}>
-                <Plus className="-ml-1 mr-2 h-4 w-4" />
-                Agregar Producto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-[75vw] max-h-[79vh] md:max-w-4xl lg:max-w-[1200px] overflow-y-auto py-4">
-              <DialogHeader>
-                <DialogTitle>{selectedProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
-              </DialogHeader>
-              <ProductForm product={selectedProduct} />
-            </DialogContent>
-          </Dialog>
-          <Button variant="outline" className="ml-2">
-            <Filter className="-ml-1 mr-2 h-4 w-4" />
-            Filtros
-          </Button>
+        {/* KPIs del inventario */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Package className="h-8 w-8 text-blue-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Total Productos</p>
+                  <p className="text-2xl font-bold">{totalProducts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Package className="h-8 w-8 text-green-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Productos Activos</p>
+                  <p className="text-2xl font-bold">{activeProducts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <AlertTriangle className="h-8 w-8 text-yellow-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Bajo Stock</p>
+                  <p className="text-2xl font-bold">{lowStockProducts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <AlertTriangle className="h-8 w-8 text-red-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Sin Stock</p>
+                  <p className="text-2xl font-bold">{outOfStockProducts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className="bg-gradient-card shadow-card">
-          <CardContent className="pt-6">
-            <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nombre, SKU o categoría..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+        {/* Lista de productos */}
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Lista de Productos ({filteredProducts.length})
+              </CardTitle>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <Input
+                    placeholder="Buscar productos..."
+                    className="pl-9 w-64"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleNewProduct}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Producto
+                </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-card shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              Productos ({filteredProducts.length})
-            </CardTitle>
           </CardHeader>
           <CardContent>
-            {renderContent()}
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <span className="ml-2">Cargando productos...</span>
+              </div>
+            ) : isError ? (
+              <div className="text-center py-8 text-red-600">
+                Error al cargar productos
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {searchTerm ? 'No se encontraron productos' : 'No hay productos registrados'}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4 font-medium">Producto</th>
+                      <th className="text-left py-3 px-4 font-medium">SKU</th>
+                      <th className="text-left py-3 px-4 font-medium">Precio</th>
+                      <th className="text-left py-3 px-4 font-medium">Stock</th>
+                      <th className="text-left py-3 px-4 font-medium">Estado</th>
+                      <th className="text-center py-3 px-4 font-medium">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProducts.map((product) => {
+                      const stockStatus = getStockStatus(product.stock, product.min_stock);
+                      return (
+                        <tr key={product.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-medium">{product.name}</p>
+                              {!product.is_active && (
+                                <p className="text-sm text-gray-500">Inactivo</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">{product.sku}</td>
+                          <td className="py-3 px-4">${product.price.toFixed(2)}</td>
+                          <td className="py-3 px-4">
+                            <span className={`font-medium ${getStockColor(product.stock, product.min_stock)}`}>
+                              {product.stock}
+                            </span>
+                            <span className="text-gray-500 text-sm ml-1">/ {product.min_stock}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant={stockStatus.variant}>
+                              {stockStatus.label}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex justify-center gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => handleEditProduct(product)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => handleDeleteProduct(product)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {selectedProduct && (
-        <DeleteProductDialog
-          isOpen={isDeleteDialogOpen}
-          onClose={() => dispatch(closeDeleteDialog())}
-          productId={selectedProduct.id}
-          productName={selectedProduct.name}
-          onSuccess={() => {
-            dispatch(closeDeleteDialog());
-            queryClient.invalidateQueries({ queryKey: ['products'] });
-          }}
-        />
-      )}
-    </Layout>
+      {/* Modal del formulario */}
+      <Dialog open={isFormOpen} onOpenChange={handleCloseForm}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedProduct ? 'Editar Producto' : 'Nuevo Producto'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedProduct 
+                ? 'Modifica los datos del producto seleccionado.'
+                : 'Completa la información para crear un nuevo producto.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <ProductForm
+            product={selectedProduct}
+            onClose={handleCloseForm}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de confirmación de eliminación */}
+      <DeleteProductDialog
+        productId={selectedProduct?.id}
+        productName={selectedProduct?.name}
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onSuccess={() => {
+          setIsDeleteDialogOpen(false);
+          setSelectedProduct(null);
+        }}
+      />
+    </SimpleLayout>
   );
 }

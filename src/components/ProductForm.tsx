@@ -17,13 +17,18 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateProduct, useUpdateProduct, useCategories, Product } from "@/hooks/useProducts";
+import { useCreateProduct, useUpdateProduct, Product } from "@/hooks/useProducts";
+import { useCategories } from "@/hooks/useCategories";
 import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useDispatch, useSelector } from 'react-redux';
 import { closeFormModal } from '@/slices/inventoryUISlice';
 import { useToast } from '@/hooks/use-toast';
 import { RootState } from '@/store/store';
+import { useAuth } from '@/hooks/useSimpleAuth';
+
+// 🚫 CONFIGURACIÓN: Deshabilitar subida de imágenes
+const IMAGE_UPLOAD_ENABLED = false;
 
 // Helper para transformar string a array
 const stringToArray = z.preprocess((val) => {
@@ -52,12 +57,13 @@ export type ProductFormValues = z.infer<typeof formSchema>;
 
 interface ProductFormProps {
   product?: Product | null;
+  onClose?: () => void;
 }
 
-export function ProductForm({ product }: ProductFormProps) {
+export function ProductForm({ product, onClose }: ProductFormProps) {
   const dispatch = useDispatch();
   const { toast } = useToast();
-  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user } = useAuth();
   const { data: categories = [] } = useCategories();
   const createProductMutation = useCreateProduct();
   const updateProductMutation = useUpdateProduct();
@@ -89,6 +95,7 @@ export function ProductForm({ product }: ProductFormProps) {
 
   useEffect(() => {
     if (product) {
+      // Si hay un producto, cargar sus datos
       const defaultValues = {
         ...product,
         category_id: product.category_id || undefined,
@@ -98,73 +105,193 @@ export function ProductForm({ product }: ProductFormProps) {
       };
       form.reset(defaultValues);
       setImagePreview(product.image_url || null);
+    } else {
+      // Si no hay producto, resetear el formulario
+      form.reset({
+        name: '',
+        sku: '',
+        description: '',
+        category_id: undefined,
+        price: 0,
+        cost: 0,
+        stock: 0,
+        min_stock: 0,
+        sizes: '',
+        colors: '',
+        image_url: undefined,
+        is_active: true
+      });
+      setImagePreview(null);
+      setImageFile(null);
     }
   }, [product, form]);
 
   const uploadImage = async (file: File): Promise<string | null> => {
+    console.log('🔍 Iniciando uploadImage con:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      isAuthenticated,
+      hasUser: !!user
+    });
+
+    if (!isAuthenticated || !user) {
+      console.error('❌ Error de autenticación:', { isAuthenticated, user: !!user });
+      toast({ 
+        title: "Error de autenticación", 
+        description: "Debes iniciar sesión para subir una imagen.", 
+        variant: "destructive" 
+      });
+      return null;
+    }
+
+    setIsUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = fileName; // Simplificar la ruta - sin subcarpeta
+      // Validar el archivo
+      console.log('🔍 Validando archivo...');
+      if (file.size > 5 * 1024 * 1024) { // 5MB límite
+        const errorMsg = 'El archivo es demasiado grande. Máximo 5MB.';
+        console.error('❌ Error de tamaño:', errorMsg);
+        throw new Error(errorMsg);
+      }
+      console.log('✅ Validación de tamaño: OK');
+
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        const errorMsg = 'Tipo de archivo no válido. Solo se permiten: JPG, PNG, WebP';
+        console.error('❌ Error de tipo:', errorMsg);
+        throw new Error(errorMsg);
+      }
+      console.log('✅ Validación de tipo: OK');
+
+      // Generar nombre único del archivo (como en el ejemplo)
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `products/${fileName}`;
       const bucketName = 'images';
 
-      console.log('📦 Intentando subir imagen...');
-      console.log('📝 Detalles:');
-      console.log('  - Bucket:', bucketName);
-      console.log('  - Archivo:', file.name);
-      console.log('  - Tamaño:', file.size, 'bytes');
-      console.log('  - Tipo:', file.type);
-      console.log('  - Ruta final:', filePath);
-      
-      // Verificar autenticación usando el estado de Redux
-      if (!isAuthenticated || !user) {
-        console.warn('⚠️ Usuario no autenticado en Redux. Continuando sin imagen.');
-        console.log('💡 Para subir imágenes, asegúrate de estar autenticado');
-        return null;
-      }
-      
-      console.log('✅ Usuario autenticado detectado');
-      console.log('👤 Usuario:', user.email || 'Usuario autenticado');
-      console.log('🔑 ID de usuario:', user.id);
+      console.log('📤 Configuración de subida:', { 
+        fileName: filePath, 
+        bucketName, 
+        fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+        fileType: file.type,
+        userId: user.id
+      });
 
-      // Intentar subir la imagen con configuración mínima
-      console.log('📤 Iniciando subida...');
-      const { data, error: uploadError } = await supabase.storage
+      // Subir el archivo directamente (simplificado como en el ejemplo)
+      console.log('� Iniciando subida del archivo...');
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from(bucketName)
         .upload(filePath, file, {
-          upsert: true
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
         });
 
       if (uploadError) {
-        console.error('❌ Error detallado de subida:', {
+        console.error('❌ Error al subir archivo:', uploadError);
+        console.error('🔍 Detalles completos del error:', {
           message: uploadError.message,
-          error: uploadError
+          details: uploadError
         });
-        return null;
+        
+        // Crear el bucket si no existe (fallback)
+        if (uploadError.message.includes('not found') || uploadError.message.includes('does not exist')) {
+          console.log('🏗️ Intentando crear bucket automáticamente...');
+          
+          // Intentar con service role para crear bucket
+          const serviceClient = supabase;
+          const { error: createError } = await serviceClient.storage.createBucket(bucketName, {
+            public: true,
+            allowedMimeTypes: ['image/png', 'image/jpg', 'image/jpeg', 'image/webp'],
+            fileSizeLimit: 5242880 // 5MB
+          });
+          
+          if (!createError) {
+            console.log('✅ Bucket creado, reintentando subida...');
+            // Reintentar la subida
+            const { data: retryData, error: retryError } = await supabase.storage
+              .from(bucketName)
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false,
+                contentType: file.type
+              });
+            
+            if (retryError) {
+              throw new Error(`Error en reintento: ${retryError.message}`);
+            }
+            
+            console.log('✅ Archivo subido en reintento:', retryData);
+          } else {
+            console.error('❌ No se pudo crear bucket:', createError);
+            throw new Error('El bucket de imágenes no existe. Por favor, créalo manualmente en el Dashboard de Supabase.');
+          }
+        } else {
+          // Manejar otros errores específicos
+          if (uploadError.message.includes('Duplicate')) {
+            throw new Error('Ya existe un archivo con este nombre. Inténtalo de nuevo.');
+          } else if (uploadError.message.includes('Policy') || uploadError.message.includes('row-level security')) {
+            throw new Error('Sin permisos para subir imágenes. Verifica las políticas de storage en Supabase.');
+          } else {
+            throw new Error(`Error de subida: ${uploadError.message}`);
+          }
+        }
       }
 
-      if (!data) {
-        console.error('❌ No se recibió data de la subida');
-        return null;
-      }
+      console.log('✅ Archivo subido exitosamente:', uploadData);
 
-      console.log('✅ Imagen subida exitosamente:', data);
-      
-      // Obtener la URL pública
-      const { data: { publicUrl } } = supabase.storage
+      // Obtener la URL pública (método actualizado)
+      console.log('🔗 Obteniendo URL pública...');
+      const { data: urlData } = supabase.storage
         .from(bucketName)
         .getPublicUrl(filePath);
+
+      if (!urlData?.publicUrl) {
+        const errorMsg = 'No se pudo obtener la URL pública de la imagen';
+        console.error('❌ Error de URL:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      console.log('✅ URL pública generada:', urlData.publicUrl);
+
+      toast({ 
+        title: "✅ Imagen subida", 
+        description: "La imagen se ha subido correctamente." 
+      });
       
-      console.log(`🔗 URL pública generada: ${publicUrl}`);
-      return publicUrl;
-      
+      return urlData.publicUrl;
+
     } catch (error) {
-      console.error('💥 Error inesperado al subir imagen:', error);
+      console.error("💥 Error detallado al subir la imagen:", error);
+      
+      let errorMessage = 'Error desconocido al subir la imagen';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Error al subir imagen",
+        description: errorMessage,
+      });
+      
       return null;
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    // 🚫 FUNCIONALIDAD DESHABILITADA: Solo permite preview local
+    if (!IMAGE_UPLOAD_ENABLED) {
+      console.log('⚠️ Dropzone deshabilitado - solo preview local');
+      return;
+    }
+    
     const file = acceptedFiles[0];
     if (file) {
       setImageFile(file);
@@ -181,7 +308,8 @@ export function ProductForm({ product }: ProductFormProps) {
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.webp']
     },
-    maxFiles: 1
+    maxFiles: 1,
+    disabled: !IMAGE_UPLOAD_ENABLED // 🚫 Deshabilitar dropzone
   });
 
   const removeImage = () => {
@@ -190,105 +318,116 @@ export function ProductForm({ product }: ProductFormProps) {
     form.setValue('image_url', '');
   };
 
-  const onSubmit = async (data: ProductFormValues) => {
-    console.log('🚀 Iniciando onSubmit con data:', data);
-    console.log('📁 imageFile:', imageFile);
-    setIsUploading(true);
+  const onSuccessCallback = (data: Product) => {
+    console.log('✅ Producto guardado exitosamente:', data);
     
+    const successMessage = product 
+      ? "Producto actualizado correctamente" 
+      : "Producto creado correctamente";
+    
+    toast({
+      title: product ? "Producto actualizado" : "Producto creado",
+      description: successMessage,
+    });
+
+    // Limpiar el formulario después del éxito
+    if (onClose) {
+      onClose();
+    } else {
+      dispatch(closeFormModal());
+    }
+  };
+
+  const onErrorCallback = (error: Error) => {
+    console.error('❌ Error al guardar producto:', error);
+    console.error('🔍 Detalles del error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    let errorMessage = error.message || 'Error desconocido';
+    
+    // Manejar errores específicos
+    if (error.message.includes('duplicate') || error.message.includes('unique')) {
+      errorMessage = 'Ya existe un producto con este SKU. Por favor, usa un SKU diferente.';
+    } else if (error.message.includes('foreign key')) {
+      errorMessage = 'La categoría seleccionada no es válida. Por favor, selecciona otra categoría.';
+    } else if (error.message.includes('check constraint')) {
+      errorMessage = 'Los valores ingresados no son válidos. Verifica que los precios y cantidades sean positivos.';
+    }
+    
+    toast({
+      variant: "destructive",
+      title: `Error al ${product ? 'actualizar' : 'crear'} producto`,
+      description: errorMessage,
+    });
+  };
+
+  const onSubmit = async (data: ProductFormValues) => {
+    console.log('🚀 Iniciando envío del formulario...');
+    console.log('📝 Datos del formulario:', data);
+    console.log('🖼️ Archivo de imagen:', imageFile);
+    console.log('🔗 Imagen actual:', product?.image_url);
+    
+    setIsUploading(true);
     try {
-      let imageUrl = data.image_url;
-      let imageUploadWarning = false;
-      
+      let finalImageUrl = product?.image_url || null;
+
+      // Solo subir imagen si hay un archivo nuevo
       if (imageFile) {
-        console.log('📤 Subiendo imagen...');
-        const uploadResult = await uploadImage(imageFile);
-        console.log('📤 Resultado de subida:', uploadResult);
+        console.log('📤 Intentando subir nueva imagen...');
+        console.log('🔍 Detalles del archivo a subir:', {
+          name: imageFile.name,
+          size: imageFile.size,
+          type: imageFile.type,
+          lastModified: new Date(imageFile.lastModified).toISOString()
+        });
         
-        if (uploadResult) {
-          imageUrl = uploadResult;
-          console.log('✅ Imagen subida exitosamente. URL:', imageUrl);
+        const uploadedUrl = await uploadImage(imageFile);
+        console.log('🔄 Resultado de uploadImage:', uploadedUrl);
+        
+        // 🚫 CAMBIO: No fallar si uploadImage retorna null
+        if (uploadedUrl) {
+          finalImageUrl = uploadedUrl;
+          console.log('✅ Imagen subida exitosamente:', finalImageUrl);
         } else {
-          imageUploadWarning = true;
-          imageUrl = null;
-          console.log('❌ Fallo en subida de imagen');
+          console.log('⚠️ Subida de imagen omitida (funcionalidad deshabilitada)');
+          // Mantener la imagen actual o null, sin mostrar error
         }
       } else {
-        console.log('📷 No hay imagen para subir');
+        console.log('ℹ️ No hay imagen nueva para subir, usando imagen actual:', finalImageUrl);
       }
 
-      // Transformar strings de tallas y colores a arrays
-      const sizesArray = data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
-      const colorsArray = data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c.length > 0) : [];
-
-      const submissionData = {
+      // Preparar datos del producto
+      const productData = {
         ...data,
-        category_id: data.category_id || null,
-        image_url: imageUrl,
-        sizes: sizesArray,
-        colors: colorsArray,
-      };
-      
-      console.log('💾 Datos finales para enviar:', submissionData);
-      console.log('🖼️ URL de imagen final:', submissionData.image_url);
-
-      const onSuccessCallback = (result: any) => {
-        console.log('✅ Producto guardado exitosamente:', result);
-        dispatch(closeFormModal());
-        form.reset();
-        setImageFile(null);
-        setImagePreview(null);
-        
-        let successMessage = product 
-          ? "El producto se ha actualizado correctamente." 
-          : "El producto se ha creado correctamente.";
-        
-        if (imageUploadWarning) {
-          successMessage += " (La imagen no se pudo subir, pero el producto se guardó sin imagen)";
-        } else if (imageUrl) {
-          successMessage += " La imagen se guardó correctamente.";
-        }
-        
-        toast({
-          title: product ? "Producto actualizado" : "Producto creado",
-          description: successMessage,
-        });
+        image_url: finalImageUrl,
+        sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(Boolean) : [],
+        colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(Boolean) : [],
       };
 
-      const onErrorCallback = (error: any) => {
-        console.error('❌ Error al guardar producto:', error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: error.message || `Error al ${product ? 'actualizar' : 'crear'} el producto`,
-        });
+      console.log('💾 Datos finales del producto:', productData);
+
+      const mutationOptions = {
+        onSuccess: onSuccessCallback,
+        onError: onErrorCallback,
       };
 
-      if (product) {
+      if (product?.id) {
         console.log('🔄 Actualizando producto existente...');
-        updateProductMutation.mutate(
-          { ...submissionData, id: product.id }, 
-          { 
-            onSuccess: onSuccessCallback,
-            onError: onErrorCallback
-          }
-        );
+        updateProductMutation.mutate({ ...productData, id: product.id }, mutationOptions);
       } else {
-        console.log('🆕 Creando nuevo producto...');
-        createProductMutation.mutate(
-          submissionData as Omit<Product, 'id' | 'created_at' | 'updated_at' | 'categories'>, 
-          { 
-            onSuccess: onSuccessCallback,
-            onError: onErrorCallback
-          }
-        );
+        console.log('➕ Creando nuevo producto...');
+        createProductMutation.mutate(productData as Omit<Product, 'id' | 'created_at' | 'updated_at' | 'categories'>, mutationOptions);
       }
     } catch (error) {
-      console.error('💥 Error inesperado en onSubmit:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error inesperado",
-      });
+        console.error('💥 Error inesperado en onSubmit:', error);
+        toast({
+          variant: "destructive",
+          title: "Error Inesperado",
+          description: error instanceof Error ? error.message : "Ocurrió un error al procesar el formulario.",
+        });
     } finally {
       setIsUploading(false);
     }
@@ -298,18 +437,19 @@ export function ProductForm({ product }: ProductFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Columna Izquierda y Central: Campos de texto */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Fila 1: Nombre y SKU */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Nombre del Producto</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Input placeholder="Ej: Camisa de Lino" {...field} />
                     </FormControl>
                     <FormMessage />
@@ -320,9 +460,9 @@ export function ProductForm({ product }: ProductFormProps) {
                 control={form.control}
                 name="sku"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>SKU</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Input placeholder="Ej: CAM-LIN-001" {...field} />
                     </FormControl>
                     <FormMessage />
@@ -331,17 +471,18 @@ export function ProductForm({ product }: ProductFormProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Fila 2: Descripción y Categoría */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               <FormField
                 control={form.control}
                 name="description"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Descripción</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Textarea
                         placeholder="Descripción detallada del producto"
-                        className="resize-none h-full"
+                        className="resize-none min-h-[120px]"
                         {...field}
                       />
                     </FormControl>
@@ -353,10 +494,10 @@ export function ProductForm({ product }: ProductFormProps) {
                 control={form.control}
                 name="category_id"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Categoría</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
+                      <FormControl className="flex-1">
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona una categoría" />
                         </SelectTrigger>
@@ -375,17 +516,18 @@ export function ProductForm({ product }: ProductFormProps) {
               />
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {/* Fila 3: Precios y Stock */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <FormField
                 control={form.control}
                 name="price"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Precio</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                        <Input type="number" placeholder="0.00" className="pl-8" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                        <Input type="number" step="0.01" placeholder="0.00" className="pl-8" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -396,12 +538,12 @@ export function ProductForm({ product }: ProductFormProps) {
                 control={form.control}
                 name="cost"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Costo</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                        <Input type="number" placeholder="0.00" className="pl-8" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                        <Input type="number" step="0.01" placeholder="0.00" className="pl-8" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -412,9 +554,9 @@ export function ProductForm({ product }: ProductFormProps) {
                 control={form.control}
                 name="stock"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Stock Actual</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
                     </FormControl>
                     <FormMessage />
@@ -425,9 +567,9 @@ export function ProductForm({ product }: ProductFormProps) {
                 control={form.control}
                 name="min_stock"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Stock Mínimo</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
                     </FormControl>
                     <FormMessage />
@@ -436,14 +578,15 @@ export function ProductForm({ product }: ProductFormProps) {
               />
             </div>
 
+            {/* Fila 4: Tallas y Colores */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="sizes"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Tallas</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Input placeholder="S, M, L, XL" {...field} />
                     </FormControl>
                     <FormDescription>Separadas por comas.</FormDescription>
@@ -455,9 +598,9 @@ export function ProductForm({ product }: ProductFormProps) {
                 control={form.control}
                 name="colors"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col h-full">
                     <FormLabel>Colores</FormLabel>
-                    <FormControl>
+                    <FormControl className="flex-1">
                       <Input placeholder="Rojo, Verde, Azul" {...field} />
                     </FormControl>
                     <FormDescription>Separadas por comas.</FormDescription>
@@ -469,11 +612,11 @@ export function ProductForm({ product }: ProductFormProps) {
           </div>
 
           {/* Columna Derecha: Imagen y Estado */}
-          <div className="lg:col-span-1 space-y-6">
-            <div>
-              <FormLabel>Imagen del Producto</FormLabel>
-              <div {...getRootProps()} className="mt-2 w-full h-64 border-2 border-dashed rounded-lg flex items-center justify-center text-center cursor-pointer hover:border-primary transition-colors relative group">
-                <input {...getInputProps()} />
+          <div className="lg:col-span-1 space-y-6 flex flex-col h-full">
+            <div className="flex-1">
+              <FormLabel className="text-sm font-medium">Imagen del Producto</FormLabel>
+              <div {...getRootProps()} className="mt-2 w-full h-64 border-2 border-dashed rounded-lg flex items-center justify-center text-center relative group bg-muted/20 opacity-50 cursor-not-allowed">
+                <input {...getInputProps()} disabled />
                 {imagePreview ? (
                   <div className="relative w-full h-full">
                     <img src={imagePreview} alt="Vista previa" className="w-full h-full object-cover rounded-md" />
@@ -484,28 +627,30 @@ export function ProductForm({ product }: ProductFormProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center space-y-2 h-full">
-                    <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-full">
-                      {isDragActive ? <Upload className="h-6 w-6 text-primary" /> : <ImageIcon className="h-6 w-6 text-gray-400" />}
+                  <div className="flex flex-col items-center justify-center space-y-2 h-full p-4">
+                    <div className="p-3 bg-muted rounded-full">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-300">
-                      {isDragActive ? <p>Suelta la imagen aquí</p> : <><p className="font-medium">Arrastra una imagen o haz clic</p><p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, WEBP hasta 10MB</p></>}
+                    <div className="text-sm text-muted-foreground">
+                      <p className="font-medium">Subida de imágenes deshabilitada</p>
+                      <p className="text-xs text-muted-foreground">Temporalmente no disponible</p>
                     </div>
                   </div>
                 )}
               </div>
-              <FormDescription className="text-center mt-2">
-                La imagen se actualizará al guardar el producto.
+              <FormDescription className="text-center mt-2 text-xs">
+                La funcionalidad de imagen está temporalmente deshabilitada.
               </FormDescription>
             </div>
+            
             <FormField
               control={form.control}
               name="is_active"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
                   <div className="space-y-0.5">
-                    <FormLabel>Producto Activo</FormLabel>
-                    <FormDescription>Disponible para la venta.</FormDescription>
+                    <FormLabel className="text-sm font-medium">Producto Activo</FormLabel>
+                    <FormDescription className="text-xs">Disponible para la venta.</FormDescription>
                   </div>
                   <FormControl>
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -516,7 +661,7 @@ export function ProductForm({ product }: ProductFormProps) {
           </div>
         </div>
         
-        <div className="flex justify-end mt-8">
+        <div className="flex justify-end pt-6 border-t">
           <Button type="submit" disabled={isLoading} className="min-w-[150px]">
             {isLoading ? (
               <>

@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { supabase } from "./lib/supabase";
-import { login, logout } from "./store/authSlice";
+import { login, logout, setSessionLoading, setInitialized } from "./store/authSlice";
 import { RootState } from "./store/store";
 
 import Index from "./pages/Index";
@@ -19,6 +19,7 @@ import PurchasesPage from "./pages/PurchasesPage";
 import CategoriesPage from "./pages/CategoriesPage";
 import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
+import ReportsPage from "./pages/ReportsPage";
 import AuthPage from "./pages/AuthPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -26,12 +27,11 @@ const queryClient = new QueryClient();
 
 const App = () => {
   const dispatch = useDispatch();
-  const { isSessionLoading } = useSelector((state: RootState) => state.auth);
+  const { isSessionLoading, isInitialized } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
     let inactivityTimer: NodeJS.Timeout;
 
-    // Función para resetear el timer de inactividad
     const resetInactivityTimer = () => {
       if (inactivityTimer) clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
@@ -40,59 +40,95 @@ const App = () => {
       }, 30 * 60 * 1000); // 30 minutos
     };
 
-    // Eventos que resetean el timer de inactividad
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
     const resetTimer = () => resetInactivityTimer();
 
+    const initializeAuth = async () => {
+      try {
+        dispatch(setSessionLoading(true));
+        
+        // Verificar sesión actual
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error al obtener la sesión:', error);
+          dispatch(logout());
+          return;
+        }
+
+        if (session?.user) {
+          console.log('Sesión existente encontrada, obteniendo perfil...');
+          
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            console.error('Error al obtener el perfil:', profileError);
+            dispatch(logout());
+          } else if (profile) {
+            console.log('Perfil obtenido, rol:', profile.role);
+            dispatch(login({ user: session.user, role: profile.role }));
+            resetInactivityTimer();
+            events.forEach(event => document.addEventListener(event, resetTimer));
+          } else {
+            console.warn('Usuario autenticado pero sin perfil en la base de datos.');
+            dispatch(logout());
+          }
+        } else {
+          console.log('No hay sesión activa.');
+          dispatch(logout());
+        }
+      } catch (error) {
+        console.error("Error al inicializar autenticación:", error);
+        dispatch(logout());
+      }
+    };
+
+    // Inicializar auth solo si no está inicializado
+    if (!isInitialized) {
+      initializeAuth();
+    }
+
+    // Configurar listener para cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
-        if (session && session.user) {
-          console.log('Sesión detectada, obteniendo perfil...');
-          
-          // Solo obtener perfil si la sesión es válida
-          try {
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', session.user.id)
-              .single();
-
-            if (profileError) {
-              console.warn('No se pudo obtener el perfil, usando role por defecto:', profileError.message);
-              dispatch(login({ user: session.user, role: 'user' }));
-            } else {
-              console.log('Perfil obtenido, role:', profile.role);
-              dispatch(login({ user: session.user, role: profile.role }));
-            }
-          } catch (profileError) {
-            console.warn('Error al obtener perfil, usando role por defecto:', profileError);
-            dispatch(login({ user: session.user, role: 'user' }));
-          }
-
-          // Iniciar timer de inactividad
-          resetInactivityTimer();
-          events.forEach(event => document.addEventListener(event, resetTimer));
-        } else {
-          console.log('No hay sesión activa');
+        console.log('Auth state change:', event, session?.user?.id);
+        
+        if (event === 'SIGNED_OUT' || !session?.user) {
+          console.log('Usuario desconectado');
           dispatch(logout());
-          
-          // Limpiar timer de inactividad
           if (inactivityTimer) clearTimeout(inactivityTimer);
           events.forEach(event => document.removeEventListener(event, resetTimer));
+          return;
+        }
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          console.log('Usuario conectado o token actualizado');
+          
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error al obtener el perfil:', error);
+            dispatch(logout());
+          } else if (profile) {
+            console.log('Perfil obtenido, rol:', profile.role);
+            dispatch(login({ user: session.user, role: profile.role }));
+            resetInactivityTimer();
+            events.forEach(event => document.addEventListener(event, resetTimer));
+          } else {
+            console.warn('Usuario autenticado pero sin perfil en la base de datos.');
+            dispatch(logout());
+          }
         }
       } catch (error) {
         console.error("Error en el listener de autenticación:", error);
-        dispatch(logout());
-      }
-    });
-
-    // Verificar sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        console.log('Sesión inicial encontrada');
-        // El onAuthStateChange se encargará del resto
-      } else {
-        console.log('No hay sesión inicial');
         dispatch(logout());
       }
     });
@@ -102,9 +138,10 @@ const App = () => {
       if (inactivityTimer) clearTimeout(inactivityTimer);
       events.forEach(event => document.removeEventListener(event, resetTimer));
     };
-  }, [dispatch]);
+  }, [dispatch, isInitialized]);
 
-  if (isSessionLoading) {
+  // Mostrar loading solo durante la carga inicial
+  if (!isInitialized && isSessionLoading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -131,6 +168,7 @@ const App = () => {
               <Route path="/purchases" element={<PurchasesPage />} />
               <Route path="/categories" element={<CategoriesPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
 

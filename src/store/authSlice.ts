@@ -6,6 +6,7 @@ interface AuthState {
   user: User | null;
   role: string | null;
   isSessionLoading: boolean;
+  isInitialized: boolean;
 }
 
 const initialState: AuthState = {
@@ -13,6 +14,7 @@ const initialState: AuthState = {
   user: null,
   role: null,
   isSessionLoading: true,
+  isInitialized: false,
 };
 
 const authSlice = createSlice({
@@ -24,12 +26,14 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.role = action.payload.role;
       state.isSessionLoading = false;
+      state.isInitialized = true;
     },
     logout(state) {
       state.isAuthenticated = false;
       state.user = null;
       state.role = null;
       state.isSessionLoading = false;
+      state.isInitialized = true;
     },
     setRole(state, action: PayloadAction<string>) {
       state.role = action.payload;
@@ -37,8 +41,14 @@ const authSlice = createSlice({
     setSessionLoading(state, action: PayloadAction<boolean>) {
       state.isSessionLoading = action.payload;
     },
+    setInitialized(state, action: PayloadAction<boolean>) {
+      state.isInitialized = action.payload;
+    },
+    resetAuth() {
+      return initialState;
+    },
   },
 });
 
-export const { login, logout, setRole, setSessionLoading } = authSlice.actions;
+export const { login, logout, setRole, setSessionLoading, setInitialized, resetAuth } = authSlice.actions;
 export default authSlice.reducer;

@@ -56,21 +56,6 @@ export function useProducts() {
   })
 }
 
-export function useCategories() {
-  return useQuery({
-    queryKey: ['categories'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name')
-
-      if (error) throw error
-      return data as Category[]
-    },
-  })
-}
-
 export function useCreateProduct() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -93,7 +78,7 @@ export function useCreateProduct() {
         description: "El producto se ha creado correctamente.",
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         variant: "destructive",
         title: "Error",
@@ -126,7 +111,7 @@ export function useUpdateProduct() {
         description: "El producto se ha actualizado correctamente.",
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         variant: "destructive",
         title: "Error",
@@ -156,7 +141,7 @@ export function useDeleteProduct() {
         description: "El producto se ha eliminado correctamente.",
       })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         variant: "destructive",
         title: "Error",

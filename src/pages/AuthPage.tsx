@@ -1,68 +1,25 @@
-import { useState, useEffect } from "react";
-import { useDispatch } from 'react-redux';
-import { setPageTitle } from '@/store/uiSlice';
-import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import { login } from '../store/authSlice';
+import { useState } from "react";
+import { useAuth } from '@/hooks/useSimpleAuth';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
 import { Mail, Lock, Store, Eye, EyeOff } from "lucide-react";
 
 export default function AuthPage() {
-  const dispatch = useDispatch();
-
-  useEffect(() => {
-    dispatch(setPageTitle('Autenticación'));
-  }, [dispatch]);
+  const { signIn, loading: authLoading } = useAuth();
+  
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("admin@gmail.com");
   const [password, setPassword] = useState("admin123");
-  const navigate = useNavigate();
-  const { toast } = useToast();
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { data: { user }, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-      if (!user) throw new Error("No se pudo autenticar al usuario.");
-
-      // Obtener el rol del perfil del usuario
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError) throw profileError;
-      if (!profile) throw new Error("No se encontró el perfil del usuario.");
-
-      // Guardar sesión en Redux
-      dispatch(login({ user, role: profile.role }));
-
-      toast({
-        title: "¡Bienvenido!",
-        description: "Has iniciado sesión correctamente.",
-      });
-
-      navigate("/");
-
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error al iniciar sesión",
-        description: error.message || "Credenciales inválidas",
-      });
+      await signIn(email, password);
     } finally {
       setLoading(false);
     }
@@ -139,9 +96,9 @@ export default function AuthPage() {
               <Button
                 type="submit"
                 className="w-full bg-gradient-primary"
-                disabled={loading}
+                disabled={loading || authLoading}
               >
-                {loading ? "Iniciando sesión..." : "Acceder"}
+                {loading || authLoading ? "Iniciando sesión..." : "Acceder"}
               </Button>
             </form>
           </CardContent>

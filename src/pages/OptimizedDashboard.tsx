@@ -6,16 +6,14 @@ import {
   Package, 
   TrendingUp, 
   AlertTriangle,
+  ShoppingCart,
   Users,
-  Eye,
-  Plus
+  Calendar,
+  BarChart3
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useDashboard } from "@/hooks/useDashboard";
-import { useNavigate } from "react-router-dom";
 
-const Index = () => {
-  const navigate = useNavigate();
+export default function OptimizedDashboard() {
   const { 
     stats, 
     alerts, 
@@ -50,24 +48,6 @@ const Index = () => {
   return (
     <SimpleLayout title="Dashboard">
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600">Vista general de tu tienda</p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" size="sm" onClick={() => navigate('/reports')}>
-              <Eye className="h-4 w-4 mr-2" />
-              Ver Reportes
-            </Button>
-            <Button size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white" onClick={() => navigate('/pos')}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Venta
-            </Button>
-          </div>
-        </div>
-
         {/* Estadísticas principales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
@@ -210,49 +190,72 @@ const Index = () => {
           </div>
         )}
 
-        {/* Estadísticas adicionales */}
+        {/* Métricas adicionales */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-green-600" />
-                Valor del Inventario
+              <CardTitle className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5" />
+                <span>Valor del Inventario</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-green-600">
-                ${stats?.inventory_value?.toFixed(2) || '0.00'}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                Valor total del stock
-              </p>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-green-600 mb-2">
+                  ${stats?.inventory_value?.toFixed(2) || '0.00'}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Valor total del inventario en costo
+                </p>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-orange-600" />
-                Estado del Inventario
+              <CardTitle className="flex items-center space-x-2">
+                <Calendar className="h-5 w-5" />
+                <span>Estado del Sistema</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Stock bajo:</span>
-                  <Badge variant="secondary">{stats?.low_stock_products || 0}</Badge>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Base de datos:</span>
+                  <Badge className="bg-green-100 text-green-800">Conectado</Badge>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Sin stock:</span>
-                  <Badge variant="destructive">{stats?.out_of_stock_products || 0}</Badge>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Tiempo real:</span>
+                  <Badge className="bg-green-100 text-green-800">Activo</Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Última actualización:</span>
+                  <span className="text-sm text-gray-600">
+                    {new Date().toLocaleTimeString('es-ES')}
+                  </span>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Estado sin alertas */}
+        {totalAlerts === 0 && (
+          <Card>
+            <CardContent className="p-8">
+              <div className="text-center">
+                <Package className="h-16 w-16 text-green-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-green-600 mb-2">
+                  ¡Todo está en orden!
+                </h3>
+                <p className="text-gray-600">
+                  No hay alertas de inventario en este momento.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </SimpleLayout>
   );
-};
-
-export default Index;
+}

@@ -1,13 +1,11 @@
-import { Layout } from "@/components/Layout";
-import { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { setPageTitle } from '@/store/uiSlice';
+import { SimpleLayout } from "@/components/SimpleLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { ImageUploadTester } from "@/components/ImageUploadTester"
 import { 
   Settings, 
   Store, 
@@ -21,13 +19,8 @@ import {
 } from "lucide-react"
 
 export default function SettingsPage() {
-  const dispatch = useDispatch();
-
-  useEffect(() => {
-    dispatch(setPageTitle('Configuración'));
-  }, [dispatch]);
   return (
-    <Layout>
+    <SimpleLayout title="Configuración">
       <div className="space-y-6">
         <div className="flex items-center justify-end">
           <Button className="bg-gradient-primary">
@@ -252,7 +245,17 @@ export default function SettingsPage() {
             </Card>
           </div>
         </div>
+
+        {/* Sección de Pruebas - Solo para desarrollo */}
+        <div className="mt-8">
+          <Separator className="my-6" />
+          <h2 className="text-xl font-semibold mb-4 text-center">🔧 Herramientas de Diagnóstico</h2>
+          <p className="text-sm text-muted-foreground text-center mb-6">
+            Esta sección es temporal para diagnosticar problemas de subida de imágenes
+          </p>
+          <ImageUploadTester />
+        </div>
       </div>
-    </Layout>
+    </SimpleLayout>
   )
 }

@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { toast } from "@/hooks/use-toast";
-import { Product } from '@/hooks/useProducts';
+import { Product } from './productsSlice';
 import { RootState } from './store';
 
 export interface CartItem extends Product {

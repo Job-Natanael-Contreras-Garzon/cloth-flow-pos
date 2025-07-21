@@ -6,7 +6,8 @@ import {
   TrendingUp, 
   AlertTriangle,
   Settings,
-  Tag
+  Tag,
+  BarChart3
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
@@ -32,6 +33,7 @@ const mainItems = [
 const managementItems = [
   { title: "Compras", url: "/purchases", icon: History },
   { title: "Categorías", url: "/categories", icon: Tag },
+  { title: "Reportes", url: "/reports", icon: BarChart3 },
   { title: "Alertas", url: "/alerts", icon: AlertTriangle },
   { title: "Configuración", url: "/settings", icon: Settings },
 ]
