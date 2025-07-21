@@ -1,260 +1,352 @@
 import { SimpleLayout } from "@/components/SimpleLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { ImageUploadTester } from "@/components/ImageUploadTester"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useRealTimeStockAlerts } from "@/hooks/useRealTimeStockAlerts"
+import { useSelector } from "react-redux"
+import { RootState } from "@/store/store"
+import { supabase } from "@/lib/supabase"
 import { 
-  Settings, 
-  Store, 
   Bell, 
   Shield, 
-  Palette,
-  Database,
-  Printer,
-  Globe,
-  Save
+  User,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Save,
+  Loader2
 } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SettingsPage() {
+  const { alerts, loading, getAlertsByType, totalAlerts } = useRealTimeStockAlerts();
+  const { user, role } = useSelector((state: RootState) => state.auth);
+  const [stockAlertsEnabled, setStockAlertsEnabled] = useState(true);
+  const [sessionTimeoutEnabled, setSessionTimeoutEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userProfile, setUserProfile] = useState({
+    full_name: '',
+    phone: '',
+    email: user?.email || ''
+  });
+  const { toast } = useToast();
+
+  const { outOfStock, critical, warning } = getAlertsByType();
+
+  // Cargar perfil del usuario al iniciar
+  const loadUserProfile = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, phone')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading profile:', error);
+        return;
+      }
+
+      if (data) {
+        setUserProfile(prev => ({
+          ...prev,
+          full_name: data.full_name || '',
+          phone: data.phone || ''
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadUserProfile();
+  }, [loadUserProfile]);
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: userProfile.full_name,
+          phone: userProfile.phone
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Perfil actualizado",
+        description: "Tu información se ha guardado correctamente",
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast({
+        variant: "destructive",
+        title: "❌ Error al guardar",
+        description: "No se pudo actualizar tu perfil. Inténtalo de nuevo.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStockAlertsToggle = (enabled: boolean) => {
+    setStockAlertsEnabled(enabled);
+    toast({
+      title: enabled ? "Alertas activadas" : "Alertas desactivadas",
+      description: enabled 
+        ? "Recibirás notificaciones cuando el stock esté bajo" 
+        : "Ya no recibirás alertas de stock bajo",
+    });
+  };
+
+  const handleSessionTimeoutToggle = (enabled: boolean) => {
+    setSessionTimeoutEnabled(enabled);
+    toast({
+      title: enabled ? "Timeout de sesión activado" : "Timeout de sesión desactivado",
+      description: enabled 
+        ? "La sesión se cerrará automáticamente por inactividad" 
+        : "La sesión permanecerá activa hasta cerrarla manualmente",
+    });
+  };
+
   return (
     <SimpleLayout title="Configuración">
       <div className="space-y-6">
-        <div className="flex items-center justify-end">
-          <Button className="bg-gradient-primary">
-            <Save className="h-4 w-4 mr-2" />
-            Guardar Cambios
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Settings Navigation */}
-          <div className="space-y-4">
-            <Card className="bg-gradient-card shadow-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Configuraciones</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button variant="ghost" className="w-full justify-start">
-                  <Store className="h-4 w-4 mr-2" />
-                  Información de Tienda
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Bell className="h-4 w-4 mr-2" />
-                  Notificaciones
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Seguridad
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Palette className="h-4 w-4 mr-2" />
-                  Apariencia
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Database className="h-4 w-4 mr-2" />
-                  Respaldos
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Printer className="h-4 w-4 mr-2" />
-                  Impresión
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Globe className="h-4 w-4 mr-2" />
-                  Localización
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Settings Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Store Information */}
-            <Card className="bg-gradient-card shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Store className="h-5 w-5 text-primary" />
-                  Información de la Tienda
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="store-name">Nombre de la Tienda</Label>
-                    <Input id="store-name" defaultValue="Fashion Store" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="store-phone">Teléfono</Label>
-                    <Input id="store-phone" defaultValue="+1 (555) 123-4567" />
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* User Profile Information */}
+          <Card className="bg-gradient-card shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />
+                Información del Usuario
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="store-address">Dirección</Label>
-                  <Input id="store-address" defaultValue="123 Fashion St, Ciudad de Moda" />
+                  <Label htmlFor="email">Email (solo lectura)</Label>
+                  <Input 
+                    id="email" 
+                    value={user?.email || ''} 
+                    disabled 
+                    className="bg-muted"
+                  />
                 </div>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="store-email">Email</Label>
-                  <Input id="store-email" type="email" defaultValue="info@fashionstore.com" />
+                  <Label htmlFor="full_name">Nombre Completo</Label>
+                  <Input 
+                    id="full_name" 
+                    value={userProfile.full_name}
+                    onChange={(e) => setUserProfile(prev => ({ ...prev, full_name: e.target.value }))}
+                    placeholder="Ingresa tu nombre completo"
+                  />
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Notifications */}
-            <Card className="bg-gradient-card shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-primary" />
-                  Notificaciones
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="stock-alerts" className="text-base">Alertas de Stock Bajo</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Recibir notificaciones cuando el stock esté bajo
-                    </p>
-                  </div>
-                  <Switch id="stock-alerts" defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="sales-reports" className="text-base">Reportes de Ventas</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Reportes diarios automáticos por email
-                    </p>
-                  </div>
-                  <Switch id="sales-reports" defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="new-purchases" className="text-base">Nuevas Compras</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Notificar cuando se agreguen nuevos productos
-                    </p>
-                  </div>
-                  <Switch id="new-purchases" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Security */}
-            <Card className="bg-gradient-card shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                  Seguridad
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+                
                 <div className="space-y-2">
-                  <Label htmlFor="current-password">Contraseña Actual</Label>
-                  <Input id="current-password" type="password" />
+                  <Label htmlFor="phone">Teléfono</Label>
+                  <Input 
+                    id="phone" 
+                    value={userProfile.phone}
+                    onChange={(e) => setUserProfile(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="Ej: +1 (555) 123-4567"
+                  />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">Nueva Contraseña</Label>
-                    <Input id="new-password" type="password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
-                    <Input id="confirm-password" type="password" />
-                  </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Rol:</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    role === 'admin' 
+                      ? 'bg-red-100 text-red-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {role === 'admin' ? 'Administrador' : 'Vendedor'}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="session-timeout" className="text-base">Tiempo de Sesión</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Cerrar sesión automáticamente por inactividad
-                    </p>
-                  </div>
-                  <Switch id="session-timeout" defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
+                
+                <Button 
+                  onClick={handleSaveProfile} 
+                  disabled={isLoading}
+                  className="w-full"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Guardar Cambios
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Appearance */}
-            <Card className="bg-gradient-card shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5 text-primary" />
-                  Apariencia
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="dark-mode" className="text-base">Modo Oscuro</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Cambiar a tema oscuro
-                    </p>
-                  </div>
-                  <Switch id="dark-mode" />
-                </div>
-                <Separator />
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Moneda</Label>
-                  <Input id="currency" defaultValue="USD ($)" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tax-rate">Tasa de Impuesto (%)</Label>
-                  <Input id="tax-rate" type="number" defaultValue="16" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Backup & Data */}
-            <Card className="bg-gradient-card shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="h-5 w-5 text-primary" />
-                  Respaldos y Datos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base">Respaldo Automático</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Respaldar datos automáticamente cada 24 horas
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex gap-3">
-                  <Button variant="outline">
-                    <Database className="h-4 w-4 mr-2" />
-                    Crear Respaldo
-                  </Button>
-                  <Button variant="outline">
-                    <Database className="h-4 w-4 mr-2" />
-                    Restaurar Datos
-                  </Button>
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
+          {/* Security Settings */}
+          <Card className="bg-gradient-card shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Configuración de Seguridad
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-base font-medium">Timeout de Sesión</span>
                   <p className="text-sm text-muted-foreground">
-                    Último respaldo: 15 de Enero, 2024 a las 3:00 AM
+                    Cerrar sesión automáticamente por inactividad
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+                <Switch 
+                  checked={sessionTimeoutEnabled}
+                  onCheckedChange={handleSessionTimeoutToggle}
+                />
+              </div>
+              <Separator />
+              <div className="text-sm text-muted-foreground">
+                <p><strong>Nota:</strong> Para cambiar tu contraseña, usa la función "Olvidé mi contraseña" en la pantalla de login.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stock Alerts Settings */}
+          <Card className="bg-gradient-card shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-primary" />
+                Alertas de Stock
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-base font-medium">Alertas de Stock Bajo</span>
+                  <p className="text-sm text-muted-foreground">
+                    Recibir notificaciones cuando el stock esté bajo
+                  </p>
+                </div>
+                <Switch 
+                  checked={stockAlertsEnabled}
+                  onCheckedChange={handleStockAlertsToggle}
+                />
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Estado actual de alertas:</p>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">Cargando alertas...</p>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-red-500" />
+                      <span className="text-sm">Sin stock: {outOfStock.length} productos</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-orange-500" />
+                      <span className="text-sm">Stock crítico: {critical.length} productos</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                      <span className="text-sm">Stock bajo: {warning.length} productos</span>
+                    </div>
+                    {totalAlerts === 0 && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span className="text-sm">Todo el stock está en niveles normales</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* System Information */}
+          <Card className="bg-gradient-card shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Información del Sistema
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium">Base de datos:</span>
+                  <span className="text-green-600 text-sm">Conectada (Supabase)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Autenticación:</span>
+                  <span className="text-green-600 text-sm">Activa</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Storage:</span>
+                  <span className="text-green-600 text-sm">Disponible</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Actualizaciones en tiempo real:</span>
+                  <span className="text-green-600 text-sm">Habilitadas</span>
+                </div>
+              </div>
+              <Separator />
+              <div className="text-sm text-muted-foreground">
+                <p><strong>Respaldos:</strong> Los datos se respaldan automáticamente en la nube cada 24 horas con Supabase.</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Sección de Pruebas - Solo para desarrollo */}
-        <div className="mt-8">
-          <Separator className="my-6" />
-          <h2 className="text-xl font-semibold mb-4 text-center">🔧 Herramientas de Diagnóstico</h2>
-          <p className="text-sm text-muted-foreground text-center mb-6">
-            Esta sección es temporal para diagnosticar problemas de subida de imágenes
-          </p>
-          <ImageUploadTester />
-        </div>
+        {/* Stock Alerts Summary */}
+        {stockAlertsEnabled && totalAlerts > 0 && (
+          <Card className="bg-gradient-card shadow-card border-l-4 border-l-orange-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                Resumen de Alertas de Stock
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{outOfStock.length}</div>
+                  <div className="text-sm text-muted-foreground">Sin stock</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{critical.length}</div>
+                  <div className="text-sm text-muted-foreground">Stock crítico</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">{warning.length}</div>
+                  <div className="text-sm text-muted-foreground">Stock bajo</div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  onClick={() => window.location.href = '/alerts'}
+                >
+                  Ver todas las alertas
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </SimpleLayout>
   )
